@@ -17,7 +17,6 @@ import org.spongepowered.api.plugin.Plugin;
 import org.spongepowered.api.text.Text;
 
 import java.io.IOException;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -111,20 +110,19 @@ public final class SLinky {
             input.getShiftClickAction().ifPresent(builder::onShiftClick);
 
             String[] split = SLinky.MATCH_PATTERN.split(raw);
-            AtomicInteger pos = new AtomicInteger(0);
-
             matcher.reset();
-
+            
+            int pos = 0;
             while (matcher.find()) {
-                int i = pos.getAndAdd(1);
-                if (i < split.length) {
+                int i = pos++;
+                if (pos < split.length) {
                     builder.append(Text.of(split[i]));
                 }
                 builder.append(template.with("url", matcher.group()).render());
             }
 
-            if (pos.get() < split.length) {
-                builder.append(Text.of(split[pos.get()]));
+            if (pos < split.length) {
+                builder.append(Text.of(split[pos]));
             }
 
             builder.applyTo(rootBuilder);

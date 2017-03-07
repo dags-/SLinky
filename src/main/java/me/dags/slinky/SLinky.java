@@ -45,7 +45,7 @@ public final class SLinky {
     @Listener
     public void reload(GameReloadEvent event) {
         this.config = loadConfig();
-        String link = getOrAdd("link_template", STRING, "[yellow,underline,{:hoverTemplate}](linkTemplate)");
+        String link = getOrAdd("link_template", STRING, "[yellow,underline,{:hover_template}](link)");
         String hover = getOrAdd("hover_template", STRING, "[green,italic](Click to open {url})");
         this.linkTemplate = MarkupSpec.create().template(link);
         this.hoverTemplate = MarkupSpec.create().template(hover);

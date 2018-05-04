@@ -17,13 +17,14 @@ import org.spongepowered.api.plugin.Plugin;
 import org.spongepowered.api.text.Text;
 
 import java.io.IOException;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
  * @author dags <dags@dags.me>
  */
-@Plugin(id = "slinky", name = "SLinky", version = "0.1", description = "Link formatting")
+@Plugin(id = "slinky", name = "Slinky", version = "2.0", description = "Links")
 public final class SLinky {
 
     private static final String MATCH = "((ht|f)tp(s?):\\/\\/|www\\.)(([\\w\\-]+\\.){1,}?([\\w\\-.~]+\\/?)*[\\p{Alnum}.,%_=?&#\\-+()\\[\\]\\*$~@!:/{};']*)";
@@ -44,7 +45,7 @@ public final class SLinky {
     @Listener
     public void reload(GameReloadEvent event) {
         this.config = loadConfig();
-        String link = getOrAdd("link_template", STRING, "[yellow,underline,{:hover_template}](link)");
+        String link = getOrAdd("link_template", STRING, "[yellow,underline,{:hoverTemplate}](linkTemplate)");
         String hover = getOrAdd("hover_template", STRING, "[green,italic](Click to open {url})");
         this.linkTemplate = MarkupSpec.create().template(link);
         this.hoverTemplate = MarkupSpec.create().template(hover);
@@ -110,19 +111,20 @@ public final class SLinky {
             input.getShiftClickAction().ifPresent(builder::onShiftClick);
 
             String[] split = SLinky.MATCH_PATTERN.split(raw);
+            AtomicInteger pos = new AtomicInteger(0);
+
             matcher.reset();
-            
-            int pos = 0;
+
             while (matcher.find()) {
-                int i = pos++;
-                if (pos < split.length) {
+                int i = pos.getAndAdd(1);
+                if (i < split.length) {
                     builder.append(Text.of(split[i]));
                 }
                 builder.append(template.with("url", matcher.group()).render());
             }
 
-            if (pos < split.length) {
-                builder.append(Text.of(split[pos]));
+            if (pos.get() < split.length) {
+                builder.append(Text.of(split[pos.get()]));
             }
 
             builder.applyTo(rootBuilder);

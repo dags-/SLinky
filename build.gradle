@@ -1,36 +1,42 @@
 plugins {
-    id 'com.github.johnrengelman.shadow' version '1.2.4'
-    id 'java'
+    id "com.github.johnrengelman.shadow" version "4.0.2"
+    id "org.spongepowered.plugin" version "0.8.1"
+    id "java"
 }
 
-group 'me.dags'
-version '2.0-SNAPSHOT'
-def spongeAPI = '7.1.0'
-def spongeChannel = 'SNAPSHOT'
+group "me.dags"
+version "3.0.0"
+def spongeAPI = "7.2.0"
+def spongeChannel = "SNAPSHOT"
+
+sponge {
+    plugin.id = rootProject.name.toLowerCase()
+    plugin.meta {
+        name = rootProject.name
+        version = rootProject.version
+        description = "Links"
+    }
+}
 
 repositories {
     mavenCentral()
-    maven {
-        url 'http://repo.spongepowered.org/maven'
-    }
-    maven {
-        url 'https://jitpack.io'
-    }
+    maven { url "https://jitpack.io" }
 }
 
 dependencies {
     compile "org.spongepowered:spongeapi:${spongeAPI}-$spongeChannel"
-    compile ('com.github.dags-:TextMU:0.2') {
-        exclude module: 'spongeapi'
-    }
+    shadow "com.github.dags-:Config:1.0.8"
+    compile "com.github.dags-:TextMU:0.4.3"
+    shadow "com.github.dags-:TextMU:0.4.3"
 }
 
 shadowJar {
-    dependencies {
-        include dependency('com.github.dags-:TextMU')
-    }
-    relocate 'me.dags.textmu', 'me.dags.chat.libs.textmu'
-    archiveName = "${baseName}-${version}-SpongeAPI-${spongeAPI}.jar"
+    minimize()
+    classifier = null
+    configurations = [project.configurations.shadow]
+    relocate "me.dags.text.", "${project.group}.${sponge.plugin.id}.libs.text."
+    relocate "me.dags.config.", "${project.group}.${sponge.plugin.id}.libs.config."
+    archivesBaseName  = "${sponge.plugin.meta.name}-${spongeAPI}"
 }
 
 jar.dependsOn shadowJar

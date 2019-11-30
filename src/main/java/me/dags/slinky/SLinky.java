@@ -1,22 +1,23 @@
 package me.dags.slinky;
 
-import com.google.common.reflect.TypeToken;
 import com.google.inject.Inject;
-import me.dags.textmu.MarkupSpec;
-import me.dags.textmu.MarkupTemplate;
-import ninja.leaping.configurate.ConfigurationNode;
-import ninja.leaping.configurate.commented.CommentedConfigurationNode;
-import ninja.leaping.configurate.loader.ConfigurationLoader;
-import ninja.leaping.configurate.objectmapping.ObjectMappingException;
+import me.dags.config.Config;
+import me.dags.text.MUSpec;
+import me.dags.text.template.Context;
+import me.dags.text.template.MUTemplate;
+import me.dags.text.template.Template;
 import org.spongepowered.api.config.DefaultConfig;
 import org.spongepowered.api.event.Listener;
 import org.spongepowered.api.event.Order;
 import org.spongepowered.api.event.game.GameReloadEvent;
+import org.spongepowered.api.event.game.state.GameInitializationEvent;
 import org.spongepowered.api.event.message.MessageChannelEvent;
 import org.spongepowered.api.plugin.Plugin;
 import org.spongepowered.api.text.Text;
 
 import java.io.IOException;
+import java.io.StringWriter;
+import java.nio.file.Path;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -24,32 +25,38 @@ import java.util.regex.Pattern;
 /**
  * @author dags <dags@dags.me>
  */
-@Plugin(id = "slinky", name = "Slinky", version = "2.0", description = "Links")
+@Plugin(id = "slinky")
 public final class SLinky {
 
     private static final String MATCH = "((ht|f)tp(s?):\\/\\/|www\\.)(([\\w\\-]+\\.){1,}?([\\w\\-.~]+\\/?)*[\\p{Alnum}.,%_=?&#\\-+()\\[\\]\\*$~@!:/{};']*)";
     private static final Pattern MATCH_PATTERN = Pattern.compile(MATCH);
-    private static final TypeToken<String> STRING = TypeToken.of(String.class);
 
-    private final ConfigurationLoader<CommentedConfigurationNode> loader;
-    private CommentedConfigurationNode config;
-    private MarkupTemplate hoverTemplate;
-    private MarkupTemplate linkTemplate;
+    private final Config config;
+    private Template hover;
+    private MUTemplate link;
 
     @Inject
-    public SLinky(@DefaultConfig(sharedRoot = false) ConfigurationLoader<CommentedConfigurationNode> loader) {
-        this.loader = loader;
-        this.reload(null);
+    public SLinky(@DefaultConfig(sharedRoot = false) Path path) {
+        this.config = Config.must(path);
+    }
+
+    @Listener
+    public void init(GameInitializationEvent event) {
+        reload(null);
     }
 
     @Listener
     public void reload(GameReloadEvent event) {
-        this.config = loadConfig();
-        String link = getOrAdd("link_template", STRING, "[yellow,underline,{:hoverTemplate}](linkTemplate)");
-        String hover = getOrAdd("hover_template", STRING, "[green,italic](Click to open {url})");
-        this.linkTemplate = MarkupSpec.create().template(link);
-        this.hoverTemplate = MarkupSpec.create().template(hover);
-        saveConfig();
+        try {
+            config.reload();
+            String linkTemplate = config.get("link", "[link](yellow,underline,{hover},{url})");
+            String hoverTemplate = config.get("hover", "[Click to open {url}](green,italic)");
+            this.link = MUSpec.create().template(linkTemplate);
+            this.hover = Template.parse(hoverTemplate);
+            config.saveIfAbsent();
+        } catch (Throwable t) {
+            t.printStackTrace();
+        }
     }
 
     @Listener(order = Order.LAST)
@@ -59,48 +66,16 @@ public final class SLinky {
         event.getFormatter().setBody(processed);
     }
 
-    private CommentedConfigurationNode loadConfig() {
-        try {
-            return loader.load();
-        } catch (IOException e) {
-            e.printStackTrace();
-            return loader.createEmptyNode();
-        }
-    }
-
-    private void saveConfig() {
-        try {
-            loader.save(config);
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
-    }
-
-    private <T> T getOrAdd(String key, TypeToken<T> token, T defaultVal) {
-        try {
-            ConfigurationNode node = config.getNode(key);
-            if (node.isVirtual()) {
-                node.setValue(token, defaultVal);
-                return defaultVal;
-            }
-            return node.getValue(token);
-        } catch (ObjectMappingException e) {
-            e.printStackTrace();
-            return defaultVal;
-        }
-    }
-
     private Text process(Text input) {
         if (MATCH_PATTERN.matcher(input.toPlain()).find()) {
-            MarkupTemplate.Applier template = linkTemplate.with("hover_template", hoverTemplate);
             Text.Builder builder = Text.builder();
-            processOne(input, builder, template);
+            processOne(input, builder);
             return builder.build();
         }
         return input;
     }
 
-    private void processOne(Text input, Text.Builder rootBuilder, MarkupTemplate.Applier template) {
+    private void processOne(Text input, Text.Builder rootBuilder) {
         String raw = input.toPlainSingle();
         Matcher matcher = SLinky.MATCH_PATTERN.matcher(raw);
 
@@ -120,7 +95,8 @@ public final class SLinky {
                 if (i < split.length) {
                     builder.append(Text.of(split[i]));
                 }
-                builder.append(template.with("url", matcher.group()).render());
+                Context context = Context.create().with("url", matcher.group()).with("hover", hover);
+                builder.append(link.with(context).render());
             }
 
             if (pos.get() < split.length) {
@@ -133,7 +109,19 @@ public final class SLinky {
         }
 
         for (Text child : input.getChildren()) {
-            processOne(child, rootBuilder, template);
+            processOne(child, rootBuilder);
+        }
+    }
+
+    private Text render(String url) {
+        try {
+            Context context = Context.create().with("url", url).with("hover", hover);
+            StringWriter writer = new StringWriter();
+            hover.apply(context, writer);
+            context.with("hover", writer.toString());
+            return link.with(context).render();
+        } catch (IOException e) {
+            return Text.of(url);
         }
     }
 }
